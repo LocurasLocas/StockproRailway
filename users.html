@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Usuarios — StockPro{% endblock %}
+{% block page_title %}Usuarios{% endblock %}
+{% block page_subtitle %}Gestión de accesos al sistema{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary" onclick="document.getElementById('newUserModal').classList.add('open')"><i class="fas fa-plus"></i> Nuevo Usuario</button>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Fecha de alta</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:.75rem">
+              <div style="width:34px;height:34px;background:{% if u.role=='admin' %}var(--brand){% elif u.role=='editor' %}var(--success){% else %}var(--text-light){% endif %};border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:.8rem">{{ u.username[0].upper() }}</div>
+              <span style="font-weight:600">{{ u.username }}</span>
+              {% if u.id == current_user.id %}<span class="badge badge-purple" style="font-size:.65rem">Tú</span>{% endif %}
+            </div>
+          </td>
+          <td class="text-muted" style="font-size:.85rem">{{ u.email }}</td>
+          <td>
+            <span class="badge {% if u.role == 'admin' %}badge-purple{% elif u.role == 'editor' %}badge-success{% else %}badge-gray{% endif %}">
+              {{ u.role }}
+            </span>
+          </td>
+          <td class="text-muted" style="font-size:.82rem">{{ u.created_at.strftime('%d/%m/%Y') }}</td>
+          <td><span class="badge {% if u.is_active_user %}badge-success{% else %}badge-danger{% endif %}">{% if u.is_active_user %}Activo{% else %}Inactivo{% endif %}</span></td>
+          <td>
+            {% if u.id != current_user.id %}
+            <form method="POST" action="{{ url_for('toggle_user', id=u.id) }}">
+              <button class="btn btn-sm {% if u.is_active_user %}btn-warning{% else %}btn-success{% endif %}">
+                <i class="fas fa-{% if u.is_active_user %}ban{% else %}check{% endif %}"></i>
+                {% if u.is_active_user %}Desactivar{% else %}Activar{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="margin-top:1.25rem;padding:1rem;background:var(--brand-bg);border-radius:var(--radius);border:1px solid var(--brand-light)">
+  <div style="font-size:.85rem;font-weight:600;color:var(--brand);margin-bottom:.5rem"><i class="fas fa-info-circle"></i> Roles del sistema</div>
+  <div style="font-size:.82rem;color:var(--text-muted);display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">
+    <div><strong>Admin:</strong> Acceso total, gestión de usuarios, eliminación de datos</div>
+    <div><strong>Editor:</strong> Puede crear y modificar productos, movimientos y presupuestos</div>
+    <div><strong>Viewer:</strong> Solo puede visualizar el inventario y presupuestos</div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="newUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-user-plus"></i> Nuevo Usuario</span>
+      <button class="modal-close" onclick="document.getElementById('newUserModal').classList.remove('open')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('new_user') }}">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre de usuario *</label><input type="text" name="username" class="form-control" required placeholder="usuario123"></div>
+          <div class="form-group"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" required placeholder="email@ejemplo.com"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Contraseña *</label><input type="password" name="password" class="form-control" required placeholder="Contraseña segura"></div>
+        <div class="form-group">
+          <label class="form-label">Rol</label>
+          <select name="role" class="form-control">
+            <option value="viewer">Viewer — Solo lectura</option>
+            <option value="editor">Editor — Puede modificar</option>
+            <option value="admin">Admin — Acceso total</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('newUserModal').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear Usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

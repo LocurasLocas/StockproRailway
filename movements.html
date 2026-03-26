@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Movimientos — StockPro{% endblock %}
+{% block page_title %}Historial de Movimientos{% endblock %}
+{% block page_subtitle %}Registro completo de entradas y salidas{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Stock ant.</th><th>Stock nuevo</th><th>Usuario</th><th>Notas</th></tr></thead>
+      <tbody>
+        {% for m in movements.items %}
+        <tr>
+          <td style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="font-weight:500">{{ m.product.name }}</td>
+          <td><span class="badge {% if m.movement_type == 'entrada' %}badge-success{% elif m.movement_type == 'salida' %}badge-danger{% else %}badge-info{% endif %}">{{ m.movement_type }}</span></td>
+          <td class="mono fw-600">{{ m.quantity }}</td>
+          <td class="mono text-muted">{{ m.previous_stock }}</td>
+          <td class="mono fw-600">{{ m.new_stock }}</td>
+          <td style="font-size:.82rem;color:var(--text-muted)">{{ m.user.username }}</td>
+          <td style="font-size:.8rem;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis">{{ m.notes or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted)">Sin movimientos registrados</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if movements.pages > 1 %}
+  <div style="padding:1rem;display:flex;gap:.5rem;justify-content:center">
+    {% if movements.has_prev %}<a href="{{ url_for('movements', page=movements.prev_num) }}" class="btn btn-sm btn-outline">← Anterior</a>{% endif %}
+    <span style="padding:.35rem .75rem;font-size:.8rem;color:var(--text-muted)">Pág {{ movements.page }} de {{ movements.pages }}</span>
+    {% if movements.has_next %}<a href="{{ url_for('movements', page=movements.next_num) }}" class="btn btn-sm btn-outline">Siguiente →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
