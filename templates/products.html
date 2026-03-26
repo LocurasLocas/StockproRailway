@@ -1,1 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}Productos — StockPro{% endblock %}
+{% block page_title %}Productos{% endblock %}
+{% block page_subtitle %}Gestión de inventario{% endblock %}
+{% block topbar_actions %}
+  {% if current_user.can_edit() %}
+  <a href="{{ url_for('new_product') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Nuevo Producto</a>
+  {% endif %}
+{% endblock %}
+{% block extra_head %}
+<style>
+  .filters { display:flex; gap:.75rem; margin-bottom:1.25rem; flex-wrap:wrap; }
+  .search-wrap { position:relative; flex:1; min-width:200px; }
+  .search-wrap i { position:absolute; left:.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); }
+  .search-wrap input { padding-left:2.2rem; }
+  .product-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:1rem; }
+  .product-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:1.25rem; transition:box-shadow .15s, transform .15s;
+  }
+  .product-card:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); }
+  .product-card.low { border-left:3px solid var(--warning); }
+  .product-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:.75rem; }
+  .product-name { font-weight:600; font-size:.95rem; line-height:1.3; }
+  .product-sku { font-size:.75rem; color:var(--text-muted); font-family:'JetBrains Mono',monospace; margin-top:.15rem; }
+  .product-stock { text-align:center; }
+  .stock-number { font-size:1.8rem; font-weight:700; line-height:1; }
+  .stock-label { font-size:.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+  .product-meta { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.75rem 0; }
+  .meta-item { background:var(--surface2); border-radius:6px; padding:.4rem .6rem; }
+  .meta-val { font-size:.875rem; font-weight:600; }
+  .meta-key { font-size:.65rem; color:var(--text-muted); text-transform:uppercase; }
+  .product-actions { display:flex; gap:.5rem; margin-top:.75rem; }
+  .stock-modal-content { }
+  .movement-type-btns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.5rem; margin-bottom:1rem; }
+  .type-btn {
+    padding:.6rem; border:2px solid var(--border); border-radius:8px; background:none;
+    cursor:pointer; font-family:'Sora',sans-serif; font-size:.8rem; font-weight:600;
+    text-align:center; transition:all .15s;
+  }
+  .type-btn.active.entrada { border-color:var(--success); background:#d1fae5; color:#065f46; }
+  .type-btn.active.salida { border-color:var(--danger); background:#fee2e2; color:#991b1b; }
+  .type-btn.active.ajuste { border-color:var(--info); background:#dbeafe; color:#1e40af; }
+  .view-toggle { display:flex; gap:.25rem; }
+  .view-btn { padding:.4rem .65rem; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:6px; cursor:pointer; }
+  .view-btn.active { background:var(--brand-bg); color:var(--brand); border-color:var(--brand-light); }
+</style>
+{% endblock %}
 
+{% block content %}
+<form method="GET" class="filters">
+  <div class="search-wrap">
+    <i class="fas fa-search"></i>
+    <input type="text" name="q" class="form-control" placeholder="Buscar productos..." value="{{ q }}">
+  </div>
+  <select name="cat" class="form-control" style="max-width:180px" onchange="this.form.submit()">
+    <option value="">Todas las categorías</option>
+    {% for c in categories %}
+    <option value="{{ c.id }}" {% if cat_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-outline"><i class="fas fa-filter"></i> Filtrar</button>
+  {% if q or cat_id %}<a href="{{ url_for('products') }}" class="btn btn-outline"><i class="fas fa-times"></i></a>{% endif %}
+  <div class="view-toggle" style="margin-left:auto">
+    <button type="button" class="view-btn active" id="gridBtn" onclick="setView('grid')"><i class="fas fa-grid-2"></i></button>
+    <button type="button" class="view-btn" id="listBtn" onclick="setView('list')"><i class="fas fa-list"></i></button>
+  </div>
+</form>
+
+<div id="gridView" class="product-grid">
+  {% for p in products %}
+  <div class="product-card {% if p.low_stock %}low{% endif %}">
+    <div class="product-header">
+      <div>
+        <div class="product-name">{{ p.name }}</div>
+        {% if p.sku %}<div class="product-sku">SKU: {{ p.sku }}</div>{% endif %}
+        {% if p.category %}<span class="badge badge-purple" style="margin-top:.3rem;background:{{ p.category.color }}20;color:{{ p.category.color }}">{{ p.category.name }}</span>{% endif %}
+      </div>
+      <div class="product-stock">
+        <div class="stock-number {% if p.low_stock %}text-warning{% elif p.stock == 0 %}text-danger{% else %}text-success{% endif %}">{{ p.stock }}</div>
+        <div class="stock-label">{{ p.unit }}</div>
+        {% if p.low_stock %}<span style="font-size:.65rem;color:var(--warning)">⚠ Stock bajo</span>{% endif %}
+      </div>
+    </div>
+    <div class="product-meta">
+      <div class="meta-item">
+        <div class="meta-val mono">${{ "%.2f"|format(p.price) }}</div>
+        <div class="meta-key">Precio venta</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-val mono">${{ "%.2f"|format(p.cost) }}</div>
+        <div class="meta-key">Costo</div>
+      </div>
+    </div>
+    <div class="product-actions">
+      {% if current_user.can_edit() %}
+      <button class="btn btn-sm btn-primary" style="flex:1" onclick="openStockModal({{ p.id }}, '{{ p.name|e }}', {{ p.stock }})">
+        <i class="fas fa-arrows-rotate"></i> Stock
+      </button>
+      <a href="{{ url_for('edit_product', id=p.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-pen"></i></a>
+      {% endif %}
+      {% if current_user.is_admin() %}
+      <form method="POST" action="{{ url_for('delete_product', id=p.id) }}" onsubmit="return confirm('¿Eliminar este producto?')">
+        <button class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-muted)">
+    <i class="fas fa-box-open" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>
+    No se encontraron productos.
+    {% if current_user.can_edit() %}<br><a href="{{ url_for('new_product') }}" class="btn btn-primary" style="margin-top:1rem">Agregar primer producto</a>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div id="listView" style="display:none">
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producto</th><th>SKU</th><th>Categoría</th><th>Stock</th><th>Precio</th><th>Costo</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>
+          {% for p in products %}
+          <tr class="{% if p.low_stock %}low-stock-row{% endif %}">
+            <td><div style="font-weight:600">{{ p.name }}</div><div style="font-size:.75rem;color:var(--text-muted)">{{ p.unit }}</div></td>
+            <td class="mono text-muted">{{ p.sku or '—' }}</td>
+            <td>{% if p.category %}<span class="badge" style="background:{{ p.category.color }}20;color:{{ p.category.color }}">{{ p.category.name }}</span>{% else %}—{% endif %}</td>
+            <td><strong class="{% if p.low_stock %}text-warning{% elif p.stock==0 %}text-danger{% else %}text-success{% endif %}">{{ p.stock }}</strong></td>
+            <td class="mono">${{ "%.2f"|format(p.price) }}</td>
+            <td class="mono">${{ "%.2f"|format(p.cost) }}</td>
+            <td>{% if p.low_stock %}<span class="badge badge-warning">Stock bajo</span>{% else %}<span class="badge badge-success">OK</span>{% endif %}</td>
+            <td>
+              <div class="flex gap-1">
+                {% if current_user.can_edit() %}
+                <button class="btn btn-sm btn-primary" onclick="openStockModal({{ p.id }}, '{{ p.name|e }}', {{ p.stock }})"><i class="fas fa-arrows-rotate"></i></button>
+                <a href="{{ url_for('edit_product', id=p.id) }}" class="btn btn-sm btn-outline"><i class="fas fa-pen"></i></a>
+                {% endif %}
+                {% if current_user.is_admin() %}
+                <form method="POST" action="{{ url_for('delete_product', id=p.id) }}" onsubmit="return confirm('¿Eliminar?')">
+                  <button class="btn btn-sm btn-danger btn-icon"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Modal -->
+<div class="modal-backdrop" id="stockModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-arrows-rotate"></i> Actualizar Stock</span>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:1rem">Producto: <strong id="modalProductName"></strong></p>
+      <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:1rem">Stock actual: <strong id="modalCurrentStock" class="mono"></strong></p>
+      <div class="movement-type-btns">
+        <button class="type-btn active entrada" onclick="setType('entrada')"><i class="fas fa-arrow-down"></i><br>Entrada</button>
+        <button class="type-btn salida" onclick="setType('salida')"><i class="fas fa-arrow-up"></i><br>Salida</button>
+        <button class="type-btn ajuste" onclick="setType('ajuste')"><i class="fas fa-sliders"></i><br>Ajuste</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="qtyLabel">Cantidad a ingresar</label>
+        <input type="number" id="stockQty" class="form-control" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas (opcional)</label>
+        <textarea id="stockNotes" class="form-control" rows="2" placeholder="Motivo del movimiento..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitStock()"><i class="fas fa-check"></i> Confirmar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let currentProductId = null, currentType = 'entrada';
+
+  function openStockModal(id, name, stock) {
+    currentProductId = id;
+    document.getElementById('modalProductName').textContent = name;
+    document.getElementById('modalCurrentStock').textContent = stock;
+    document.getElementById('stockQty').value = '';
+    document.getElementById('stockNotes').value = '';
+    setType('entrada');
+    document.getElementById('stockModal').classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('stockModal').classList.remove('open'); }
+
+  function setType(t) {
+    currentType = t;
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.type-btn.${t}`).classList.add('active');
+    const labels = { entrada: 'Cantidad a ingresar', salida: 'Cantidad a retirar', ajuste: 'Nuevo stock total' };
+    document.getElementById('qtyLabel').textContent = labels[t];
+  }
+
+  async function submitStock() {
+    const qty = parseInt(document.getElementById('stockQty').value);
+    if (!qty && qty !== 0) { alert('Ingresá una cantidad'); return; }
+    const res = await fetch(`/productos/${currentProductId}/stock`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ type: currentType, quantity: qty, notes: document.getElementById('stockNotes').value })
+    });
+    const data = await res.json();
+    if(data.error) { alert(data.error); return; }
+    closeModal();
+    location.reload();
+  }
+
+  function setView(v) {
+    document.getElementById('gridView').style.display = v === 'grid' ? 'grid' : 'none';
+    document.getElementById('listView').style.display = v === 'list' ? 'block' : 'none';
+    document.getElementById('gridBtn').classList.toggle('active', v==='grid');
+    document.getElementById('listBtn').classList.toggle('active', v==='list');
+  }
+
+  document.getElementById('stockModal').addEventListener('click', e => { if(e.target === e.currentTarget) closeModal(); });
+</script>
+{% endblock %}

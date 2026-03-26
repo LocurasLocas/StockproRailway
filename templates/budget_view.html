@@ -1,1 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}{{ budget.budget_number }} — StockPro{% endblock %}
+{% block page_title %}{{ budget.budget_number }}{% endblock %}
+{% block page_subtitle %}Presupuesto para {{ budget.client_name }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('budgets') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Volver</a>
+  <a href="{{ url_for('budget_pdf', id=budget.id) }}" class="btn btn-primary" target="_blank"><i class="fas fa-file-pdf"></i> Descargar PDF</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+  .budget-view { display:grid; grid-template-columns:1fr 300px; gap:1.25rem; align-items:start; }
+  @media(max-width:768px){ .budget-view { grid-template-columns:1fr; } }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:1rem; }
+  .info-item { }
+  .info-key { font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:.15rem; }
+  .info-val { font-size:.9rem; font-weight:500; }
+  .item-row td { padding:.75rem 1rem; }
+</style>
+{% endblock %}
 
+{% block content %}
+<div class="budget-view">
+  <div>
+    <div class="card mb-2">
+      <div class="card-header"><span class="card-title"><i class="fas fa-user"></i> Datos del Cliente</span></div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item"><div class="info-key">Nombre</div><div class="info-val">{{ budget.client_name }}</div></div>
+          <div class="info-item"><div class="info-key">Email</div><div class="info-val">{{ budget.client_email or '—' }}</div></div>
+          <div class="info-item"><div class="info-key">Teléfono</div><div class="info-val">{{ budget.client_phone or '—' }}</div></div>
+          <div class="info-item"><div class="info-key">Dirección</div><div class="info-val">{{ budget.client_address or '—' }}</div></div>
+        </div>
+        {% if budget.notes %}
+        <div style="background:var(--surface2);border-radius:8px;padding:.75rem;margin-top:.5rem;font-size:.875rem;color:var(--text-muted)">{{ budget.notes }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title"><i class="fas fa-list"></i> Ítems</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Descripción</th><th>Cant.</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
+          <tbody>
+            {% for item in budget.items %}
+            <tr class="item-row">
+              <td class="text-muted mono">{{ loop.index }}</td>
+              <td style="font-weight:500">{{ item.description }}</td>
+              <td class="mono">{{ item.quantity|int if item.quantity == item.quantity|int else item.quantity }}</td>
+              <td class="mono">${{ "%.2f"|format(item.unit_price) }}</td>
+              <td class="mono fw-600">${{ "%.2f"|format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><td colspan="4" style="text-align:right;padding:.75rem 1rem;color:var(--text-muted);font-size:.85rem">Subtotal</td><td class="mono fw-600" style="padding:.75rem 1rem">${{ "%.2f"|format(budget.subtotal) }}</td></tr>
+            {% if budget.discount > 0 %}
+            <tr><td colspan="4" style="text-align:right;padding:.4rem 1rem;color:var(--text-muted);font-size:.85rem">Descuento ({{ budget.discount|int }}%)</td><td class="mono text-danger" style="padding:.4rem 1rem">-${{ "%.2f"|format(budget.discount_amount) }}</td></tr>
+            {% endif %}
+            {% if budget.tax > 0 %}
+            <tr><td colspan="4" style="text-align:right;padding:.4rem 1rem;color:var(--text-muted);font-size:.85rem">IVA ({{ budget.tax|int }}%)</td><td class="mono" style="padding:.4rem 1rem">${{ "%.2f"|format(budget.tax_amount) }}</td></tr>
+            {% endif %}
+            <tr style="background:var(--brand-bg)"><td colspan="4" style="text-align:right;padding:.85rem 1rem;font-weight:700;color:var(--brand)">TOTAL</td><td class="mono" style="padding:.85rem 1rem;font-weight:700;font-size:1.1rem;color:var(--brand)">${{ "%.2f"|format(budget.total) }}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:sticky;top:80px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Estado del presupuesto</span></div>
+      <div class="card-body">
+        <div style="text-align:center;margin-bottom:1rem">
+          <span class="badge {% if budget.status == 'aprobado' %}badge-success{% elif budget.status == 'rechazado' %}badge-danger{% elif budget.status == 'enviado' %}badge-info{% else %}badge-gray{% endif %}" style="font-size:.9rem;padding:.4rem 1rem">
+            {{ budget.status.upper() }}
+          </span>
+        </div>
+        <form method="POST" action="{{ url_for('update_budget_status', id=budget.id) }}">
+          <select name="status" class="form-control mb-1">
+            {% for s in ['borrador','enviado','aprobado','rechazado'] %}
+            <option value="{{ s }}" {% if budget.status == s %}selected{% endif %}>{{ s.capitalize() }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-outline" style="width:100%;justify-content:center">Actualizar estado</button>
+        </form>
+        <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">
+        <div class="info-item mb-1"><div class="info-key">N° Presupuesto</div><div class="info-val mono">{{ budget.budget_number }}</div></div>
+        <div class="info-item mb-1"><div class="info-key">Fecha</div><div class="info-val">{{ budget.created_at.strftime('%d/%m/%Y') }}</div></div>
+        <div class="info-item"><div class="info-key">Creado por</div><div class="info-val">{{ budget.user.username }}</div></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">
+        <a href="{{ url_for('budget_pdf', id=budget.id) }}" class="btn btn-primary" style="width:100%;justify-content:center" target="_blank">
+          <i class="fas fa-file-pdf"></i> Descargar PDF
+        </a>
+        {% if budget.client_email %}
+        <form method="POST" action="{{ url_for('send_budget_email', id=budget.id) }}" style="margin-top:.5rem">
+          <button type="submit" class="btn btn-success" style="width:100%;justify-content:center"
+            onclick="return confirm('¿Enviar el presupuesto por email a {{ budget.client_email }}?')">
+            <i class="fas fa-paper-plane"></i> Enviar al cliente
+          </button>
+        </form>
+        {% else %}
+        <div style="margin-top:.5rem;font-size:.78rem;color:var(--text-muted);text-align:center"><i class="fas fa-info-circle"></i> El cliente no tiene email registrado</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
